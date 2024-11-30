@@ -27,7 +27,7 @@ create table if not exists star_buffer
 	is_star bool not null,
 	enqueue_time datetime not null default current_timestamp,
 	constraint star_buffer_pk
-		unique (user_id, service, media_file_id, user_id)
+		unique (user_id, service, media_file_id)
 );
 `)
 
