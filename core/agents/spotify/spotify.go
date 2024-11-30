@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
+	// "sort"
 	"strings"
 
 	"github.com/navidrome/navidrome/conf"
@@ -14,7 +14,8 @@ import (
 	"github.com/navidrome/navidrome/log"
 	"github.com/navidrome/navidrome/model"
 	"github.com/navidrome/navidrome/utils/cache"
-	"github.com/xrash/smetrics"
+	// "github.com/xrash/smetrics"
+	"github.com/liuzl/gocc"
 )
 
 const spotifyAgentName = "spotify"
@@ -66,22 +67,38 @@ func (s *spotifyAgent) GetArtistImages(ctx context.Context, id, name, mbid strin
 }
 
 func (s *spotifyAgent) searchArtist(ctx context.Context, name string) (*Artist, error) {
-	artists, err := s.client.searchArtists(ctx, name, 40)
+	// 使用 gocc 进行繁简转换
+    	s2t, err := gocc.New("s2t")
+    	if err != nil {
+        	return nil, fmt.Errorf("failed to initialize gocc: %w", err)
+    	}
+
+    	// 将 name 转换为繁体
+    	tname, err := s2t.Convert(name)
+    	if err != nil {
+        	return nil, fmt.Errorf("failed to convert name: %w", err)
+    	}
+	log.Debug(ctx, "Artist name translate", "from", name,"to",tname)
+
+	artists, err := s.client.searchArtists(ctx, tname, 40)
 	if err != nil || len(artists) == 0 {
 		return nil, model.ErrNotFound
 	}
-	name = strings.ToLower(name)
+	name = strings.ToLower(tname)
 
+	log.Debug(ctx,"Before order first","artist1",artists[0].Name,"artist2",artists[1].Name)
 	// Sort results, prioritizing artists with images, with similar names and with high popularity, in this order
-	sort.Slice(artists, func(i, j int) bool {
-		ai := fmt.Sprintf("%-5t-%03d-%04d", len(artists[i].Images) == 0, smetrics.WagnerFischer(name, strings.ToLower(artists[i].Name), 1, 1, 2), 1000-artists[i].Popularity)
-		aj := fmt.Sprintf("%-5t-%03d-%04d", len(artists[j].Images) == 0, smetrics.WagnerFischer(name, strings.ToLower(artists[j].Name), 1, 1, 2), 1000-artists[j].Popularity)
-		return ai < aj
-	})
+	// sort.Slice(artists, func(i, j int) bool {
+	// 	ai := fmt.Sprintf("%-5t-%03d-%04d", len(artists[i].Images) == 0, smetrics.WagnerFischer(name, strings.ToLower(artists[i].Name), 1, 1, 2), 1000-artists[i].Popularity)
+	// 	aj := fmt.Sprintf("%-5t-%03d-%04d", len(artists[j].Images) == 0, smetrics.WagnerFischer(name, strings.ToLower(artists[j].Name), 1, 1, 2), 1000-artists[j].Popularity)
+	// 	return ai < aj
+	// })
+	// log.Debug("After order first","artist",artists[0].Name)
 
 	// If the first one has the same name, that's the one
 	if strings.ToLower(artists[0].Name) != name {
-		return nil, model.ErrNotFound
+		log.Warn(ctx, "Artist not same", "artist", name,"result",artists[0].Name)
+		// return nil, model.ErrNotFound
 	}
 	return &artists[0], err
 }
